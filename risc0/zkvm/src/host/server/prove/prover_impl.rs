@@ -36,6 +36,8 @@ use crate::{
     Loader, Receipt, Segment, Session, VerifierContext,
 };
 
+use std::time::Instant;
+
 /// An implementation of a Prover that runs locally.
 pub struct ProverImpl<H, C>
 where
@@ -73,16 +75,48 @@ where
             session.journal.as_ref().map(|x| hex::encode(x))
         );
         let mut segments = Vec::new();
+
+        println!(
+            "Peak Memory before session: {:?}",
+            self.get_peak_memory_usage()
+        );
+        let start_session = Instant::now();
+
+        let mut idx = 0;
+
         for segment_ref in session.segments.iter() {
             let segment = segment_ref.resolve()?;
             for hook in &session.hooks {
                 hook.on_pre_prove_segment(&segment);
             }
+
+            let start = Instant::now();
             segments.push(self.prove_segment(ctx, &segment)?);
+            println!(
+                "Segment {} elapse = {} ms",
+                idx,
+                start.elapsed().as_millis()
+            );
+            println!(
+                "segment {} Peak Memory after : {:?}",
+                idx,
+                self.get_peak_memory_usage()
+            );
+            idx += 1;
+
             for hook in &session.hooks {
                 hook.on_post_prove_segment(&segment);
             }
         }
+        println!(
+            "Peak Memory after session: {:?}",
+            self.get_peak_memory_usage()
+        );
+        println!(
+            "session elapse = {} ms",
+            start_session.elapsed().as_millis()
+        );
+
         // TODO(#982): Support unresolved assumptions here.
         let inner = InnerReceipt::Composite(CompositeReceipt {
             segments,

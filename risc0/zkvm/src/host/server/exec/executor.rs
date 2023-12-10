@@ -459,6 +459,10 @@ impl<'a> ExecutorImpl<'a> {
             bail!("execution of instruction at pc [0x{:08x}] resulted in a cycle count too large to fit into a single segment.", self.pc);
         }
         let exit_code = if total_pending_cycles > self.segment_limit {
+            println!(
+                "total_pending_cycles: {}, new segment",
+                total_pending_cycles
+            );
             self.split_insn = Some(self.insn_counter);
             tracing::debug!("split: [{}] pc: 0x{:08x}", self.segment_cycle, self.pc,);
             self.monitor.undo()?;
