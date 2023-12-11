@@ -265,6 +265,9 @@ impl Server {
         tracing::trace!("rx: {request:?}");
         match request.kind.ok_or(malformed_err())? {
             pb::api::server_request::Kind::Prove(request) => self.on_prove(conn, request),
+            pb::api::server_request::Kind::ProveWithId(request) => {
+                self.on_prove_with_id(conn, request)
+            }
             pb::api::server_request::Kind::Execute(request) => self.on_execute(conn, request),
             pb::api::server_request::Kind::ProveSegment(request) => {
                 self.on_prove_segment(conn, request)
@@ -358,6 +361,57 @@ impl Server {
             conn: &mut ConnectionWrapper,
             request: pb::api::ProveRequest,
         ) -> Result<pb::api::ServerReply> {
+            let env_request = request.env.ok_or(malformed_err())?;
+            let env = build_env(&conn, &env_request)?;
+
+            let binary = env_request.binary.ok_or(malformed_err())?;
+            let image = binary.as_image()?;
+
+            let opts: ProverOpts = request.opts.ok_or(malformed_err())?.into();
+            let prover = get_prover_server(&opts)?;
+            let ctx = VerifierContext::default();
+            let receipt = prover.prove(env, &ctx, image)?;
+
+            let receipt_pb: pb::core::Receipt = receipt.into();
+            let receipt_bytes = receipt_pb.encode_to_vec();
+            let asset = pb::api::Asset::from_bytes(
+                &request.receipt_out.ok_or(malformed_err())?,
+                receipt_bytes.into(),
+                "receipt.zkp",
+            )?;
+
+            Ok(pb::api::ServerReply {
+                kind: Some(pb::api::server_reply::Kind::Ok(pb::api::ClientCallback {
+                    kind: Some(pb::api::client_callback::Kind::ProveDone(
+                        pb::api::OnProveDone {
+                            receipt: Some(asset),
+                        },
+                    )),
+                })),
+            })
+        }
+
+        let msg = inner(&mut conn, request).unwrap_or_else(|err| pb::api::ServerReply {
+            kind: Some(pb::api::server_reply::Kind::Error(pb::api::GenericError {
+                reason: err.to_string(),
+            })),
+        });
+
+        tracing::trace!("tx: {msg:?}");
+        conn.send(msg)
+    }
+
+    fn on_prove_with_id(
+        &self,
+        mut conn: ConnectionWrapper,
+        request: pb::api::ProveWithIdRequest,
+    ) -> Result<()> {
+        fn inner(
+            conn: &mut ConnectionWrapper,
+            request: pb::api::ProveWithIdRequest,
+        ) -> Result<pb::api::ServerReply> {
+            let id = request.id.ok_or(malformed_err())?.into();
+
             let env_request = request.env.ok_or(malformed_err())?;
             let env = build_env(&conn, &env_request)?;
 

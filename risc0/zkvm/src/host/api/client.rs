@@ -101,6 +101,42 @@ impl Client {
         receipt_pb.try_into()
     }
 
+    /// Prove the specified [Binary].
+    pub fn prove_with_id(
+        &self,
+        id: String,
+        env: &ExecutorEnv<'_>,
+        opts: ProverOpts,
+        binary: Binary,
+    ) -> Result<Receipt> {
+        let mut conn = self.connect()?;
+
+        let request = pb::api::ServerRequest {
+            kind: Some(pb::api::server_request::Kind::ProveWithId(
+                pb::api::ProveWithIdRequest {
+                    id: id.into(),
+                    env: Some(self.make_execute_env(env, binary.try_into()?)),
+                    opts: Some(opts.into()),
+                    receipt_out: Some(pb::api::AssetRequest {
+                        kind: Some(pb::api::asset_request::Kind::Inline(())),
+                    }),
+                },
+            )),
+        };
+        conn.send(request)?;
+
+        let asset = self.prove_handler(&mut conn, env)?;
+
+        let code = conn.close()?;
+        if code != 0 {
+            bail!("Child finished with: {code}");
+        }
+
+        let receipt_bytes = asset.as_bytes()?;
+        let receipt_pb = pb::core::Receipt::decode(receipt_bytes)?;
+        receipt_pb.try_into()
+    }
+
     /// Execute the specified [Binary].
     pub fn execute<F>(
         &self,

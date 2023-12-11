@@ -95,6 +95,8 @@ pub fn main() {
         .init();
     ();
 
+    println!("Aoraki r0vm");
+
     let args = Cli::parse();
     if let Some(port) = args.mode.port {
         run_server(port);
