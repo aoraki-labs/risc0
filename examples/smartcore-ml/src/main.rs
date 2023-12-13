@@ -12,12 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use risc0_zkvm::{default_prover, ExecutorEnv};
+// use risc0_zkvm::{default_prover, ExecutorEnv};
+// use serde_json;
+// use smartcore::{
+//     linalg::basic::matrix::DenseMatrix, tree::decision_tree_classifier::DecisionTreeClassifier,
+// };
+// use smartcore_ml_methods::ML_TEMPLATE_ELF;
+
+use risc0_zkvm::recursion::{identity_p254, join, lift};
+use risc0_zkvm::{
+    get_prover_server, ExecutorEnv, ExecutorImpl, InnerReceipt, ProverOpts, Receipt,
+    SegmentReceipt, VerifierContext,
+};
 use serde_json;
 use smartcore::{
     linalg::basic::matrix::DenseMatrix, tree::decision_tree_classifier::DecisionTreeClassifier,
 };
 use smartcore_ml_methods::ML_TEMPLATE_ELF;
+
+
 
 // The serialized trained model and input data are embedded from files
 // corresponding paths listed below. Alternatively, the model can be trained in
@@ -51,7 +64,10 @@ fn predict() -> Vec<u32> {
     let data: DenseMatrix<f64> =
         rmp_serde::from_slice(&data_bytes).expect("data filed to deserialize byte array");
 
+    let segment_limit_po2 = 17;
+    println!("segment_limit_po2 {}", segment_limit_po2);
     let env = ExecutorEnv::builder()
+        .segment_limit_po2(segment_limit_po2)
         .write(&is_svm)
         .expect("bool failed to serialize")
         .write(&model)
@@ -61,21 +77,82 @@ fn predict() -> Vec<u32> {
         .build()
         .unwrap();
 
-    // Obtain the default prover.
-    // Note that for development purposes we do not need to run the prover. To
-    // bypass the prover, use:
-    // ```
-    // RISC0_DEV_MODE=1 cargo run -r
-    // ```
-    let prover = default_prover();
+    let mut exec = ExecutorImpl::from_elf(env, ML_TEMPLATE_ELF).unwrap();
+    let session = exec.run().unwrap();
+    let segments = session.resolve().unwrap();
+    println!("Got {} segments", segments.len());
+    let opts = ProverOpts {
+        hashfn: "poseidon".to_string(),
+        prove_guest_errors: false,
+    };
+    let prover = get_prover_server(&opts).unwrap();
+    println!("Proving rv32im");
+    let ctx = VerifierContext::default();
+    let segment_receipts: Vec<SegmentReceipt> = segments
+        .iter()
+        .map(|x| {
+            let start_time: std::time::Instant = std::time::Instant::now();
+            let result = prover.prove_segment(&ctx, x).unwrap();
+            let elapsed = start_time.elapsed();
+            println!("segment prove time = {:?}", elapsed);
+            result
+        })
+        .collect();
+    println!("Done proving rv32im");
+    
+    let start_time: std::time::Instant = std::time::Instant::now();
+    let mut rollup: risc0_zkvm::SuccinctReceipt = lift(&segment_receipts[0]).unwrap();
+    let elapsed = start_time.elapsed();
+    println!("lift segment 0 time = {:?}", elapsed);
+    println!("Lift Meta = {:?}", rollup.claim);
+    let ctx = VerifierContext::default();
+    for receipt in &segment_receipts[1..] {
+        let rec_receipt = lift(receipt).unwrap();
+        println!("Lift Meta = {:?}", rec_receipt.claim);
+        rec_receipt.verify_integrity_with_context(&ctx).unwrap();
+        let start_time: std::time::Instant = std::time::Instant::now();
+        rollup = join(&rollup, &rec_receipt).unwrap();
+        let elapsed = start_time.elapsed();
+        println!("join segment time = {:?}", elapsed);
+        println!("Join Meta = {:?}", rollup.claim);
+        rollup.verify_integrity_with_context(&ctx).unwrap();
+    }
 
-    // This initiates a session, runs the STARK prover on the resulting exection
-    // trace, and produces a receipt.
-    let receipt = prover.prove(env, ML_TEMPLATE_ELF).unwrap();
+    // Check on stark-to-snark
+    // let snark_receipt =
+    identity_p254(&rollup).expect("Running prover failed");
 
-    // We read the result that the guest code committed to the journal. The
-    // receipt can also be serialized and sent to a verifier.
-    receipt.journal.decode().unwrap()
+    // Uncomment to write seal...
+    // let seal: Vec<u8> =
+    // bytemuck::cast_slice(snark_receipt.seal.as_slice()).into();
+    // std::fs::write("recursion.seal", seal);
+
+    // Validate the Session rollup + journal data
+    let _rollup_receipt: Receipt = Receipt::new(InnerReceipt::Succinct(rollup), session.journal.unwrap().bytes);
+    // rollup_receipt.verify(ML_TEMPLATE_ELF).unwrap(); // the trait `From<&[u8]>` is not implemented for `risc0_zkvm::sha::Digest`
+
+    let result: Vec<u32> = vec![];
+    result
+
+    // // We read the result that the guest code committed to the journal. The
+    // // receipt can also be serialized and sent to a verifier.
+    // receipt.journal.decode().unwrap()
+    
+    // // Obtain the default prover.
+    // // Note that for development purposes we do not need to run the prover. To
+    // // bypass the prover, use:
+    // // ```
+    // // RISC0_DEV_MODE=1 cargo run -r
+    // // ```
+    // let prover = default_prover();
+
+    // // This initiates a session, runs the STARK prover on the resulting exection
+    // // trace, and produces a receipt.
+    // let receipt = prover.prove(env, ML_TEMPLATE_ELF).unwrap();
+
+    // // We read the result that the guest code committed to the journal. The
+    // // receipt can also be serialized and sent to a verifier.
+    // receipt.journal.decode().unwrap()
 }
 
 #[cfg(test)]

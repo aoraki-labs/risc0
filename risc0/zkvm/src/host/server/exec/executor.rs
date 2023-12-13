@@ -379,6 +379,10 @@ impl<'a> ExecutorImpl<'a> {
         let segment_ref = callback(final_segment)?;
         self.segments.push(segment_ref);
 
+        println!("executor total_cycles = {}", self.total_cycles());
+        println!("executor segment_count = {}", self.segments.len());
+        println!("executor execution_time = {:?}", elapsed);
+
         tracing::info!("total_cycles = {}", self.total_cycles());
         tracing::info!("segment_count = {}", self.segments.len());
         tracing::info!("execution_time = {:?}", elapsed);
