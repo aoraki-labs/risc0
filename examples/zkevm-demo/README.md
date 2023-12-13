@@ -13,9 +13,16 @@ Currently, this demo accepts an Ethereum transaction hash and replays the transa
 
 ## Dependencies
 
-Follow the [installation guide] if you don't already have the RISC Zero tools installed.
+First, [install Rust] if you don't already have it.
 
-[installation guide]: https://dev.risczero.com/api/zkvm/quickstart
+Next, install the `cargo-risczero` tool and install the toolchain with:
+```bash
+cargo install cargo-binstall
+cargo binstall cargo-risczero
+cargo risczero install
+```
+
+[install Rust]: https://doc.rust-lang.org/cargo/getting-started/installation.html
 
 ## Building
 

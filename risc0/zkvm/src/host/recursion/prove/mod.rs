@@ -343,18 +343,18 @@ impl Prover {
         control_id: &Digest,
         allowed_ids: &MerkleGroup,
     ) -> Result<()> {
-        tracing::debug!("Control ID = {:?}", control_id);
+        log::debug!("Control ID = {:?}", control_id);
         self.add_input(seal);
         let proof = allowed_ids.get_proof(control_id, self.opts.suite.hashfn.as_ref())?;
-        tracing::debug!("index = {:?}", proof.index);
+        log::debug!("index = {:?}", proof.index);
         self.add_input(bytemuck::cast_slice(&[BabyBearElem::new(
             proof.index as u32,
         )]));
         for digest in proof.digests {
-            tracing::debug!("path = {:?}", digest);
+            log::debug!("path = {:?}", digest);
             self.add_input_digest(&digest);
         }
-        tracing::debug!(
+        log::debug!(
             "root = {:?}",
             allowed_ids.calc_root(self.opts.suite.hashfn.as_ref())
         );

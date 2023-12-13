@@ -1,6 +1,7 @@
 ---
 sidebar_position: 5
 slug: /terminology
+displayed_sidebar: GettingStartedSidebar
 ---
 
 # Key Terminology
@@ -8,7 +9,7 @@ slug: /terminology
 ### Circuit
 
 [circuit]: #circuit
-[Arithmetic Circuits]: /reference-docs/about-arithmetic-circuits
+[Arithmetic Circuits]: reference-docs/about-arithmetic-circuits.md
 
 A mathematical construct that acts as the "CPU" of the [zkVM] in a manner that enables creating [proofs]. <br/>
 See also: [Arithmetic Circuits]
@@ -17,14 +18,9 @@ See also: [Arithmetic Circuits]
 
 [clock cycles]: #clock-cycles
 
-The smallest unit of compute in the zkVM [circuit], analogous to a clock cycle on a physical CPU.
-The complexity of a [guest program]'s [execution] is measured in clock cycles as they directly affect the memory, proof size, and time performance of the [zkVM].
+The smallest unit of compute in the zkVM [circuit], analogous to a clock cycle on a physical CPU. The complexity of a [guest program]'s [execution] is measured in clock cycles as they directly affect the memory, proof size, and time performance of the [zkVM].
 
 Generally, a single cycle corresponds to a single [RISC-V] operation. However, some operations require two cycles.
-
-<!-- TODO: Once the optimizaiton guide is in a release API doc, include this line.
-See the [Optimization Guide](/api/zkvm/developer-guide/optimization) for more information about the zkVM cycles and performance.
--->
 
 ### Commit
 

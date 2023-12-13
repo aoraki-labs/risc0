@@ -6,15 +6,21 @@ Walking through this example on Linux requires a minimum of around 12GB of RAM a
 
 ## Quick Start
 
-First, follow the [installation guide] if you don't already have the RISC Zero tools installed.
+First, [install Rust] if you don't already have it.
+
+Next, install the `cargo-risczero` tool and install the toolchain with:
+```bash
+cargo install cargo-binstall
+cargo binstall cargo-risczero
+cargo risczero install
+```
 
 Then, run the example with:
-
 ```bash
 cargo run --release
 ```
 
-[installation guide]: https://dev.risczero.com/api/zkvm/quickstart
+[install Rust]: https://doc.rust-lang.org/cargo/getting-started/installation.html
 
 ## Building
 

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::{Duration, Instant};
+use std::{rc::Rc, time::Duration};
 
 use blake2::{
     digest::{Update, VariableOutput},
@@ -21,25 +21,28 @@ use blake2::{
 use risc0_zkvm::{
     default_prover,
     sha::{Digest, DIGEST_WORDS},
-    ExecutorEnv, ExecutorImpl, MemoryImage, ProverOpts, Receipt, Session, VerifierContext,
+    ExecutorEnv, ExitCode, LocalProver, MemoryImage, Prover, ProverOpts, Receipt, Session,
+    VerifierContext,
 };
 
-use crate::{get_cycles, get_image, Benchmark, BenchmarkAverage};
+use crate::{exec_compute, get_image, Benchmark, BenchmarkAverage};
 
-pub struct Job {
+pub struct Job<'a> {
     pub spec: u32,
+    pub env: ExecutorEnv<'a>,
     pub image: MemoryImage,
-    pub session: Option<Session>,
+    pub session: Session,
+    pub prover: Rc<dyn Prover>,
 }
 
-pub fn new_jobs() -> Vec<<Job as Benchmark>::Spec> {
+pub fn new_jobs() -> Vec<<Job<'static> as Benchmark>::Spec> {
     vec![1, 10, 100]
 }
 
 const METHOD_ID: [u32; DIGEST_WORDS] = risc0_benchmark_methods::ITER_BLAKE2B_ID;
 const METHOD_PATH: &'static str = risc0_benchmark_methods::ITER_BLAKE2B_PATH;
 
-impl Benchmark for Job {
+impl Benchmark for Job<'_> {
     const NAME: &'static str = "iter_blake2b";
     type Spec = u32;
     type ComputeOut = Digest;
@@ -56,21 +59,31 @@ impl Benchmark for Job {
     fn proof_size_bytes(proof: &Self::ProofType) -> u32 {
         (proof
             .inner
-            .composite()
+            .flat()
             .unwrap()
-            .segments
             .iter()
             .fold(0, |acc, segment| acc + segment.get_seal_bytes().len())) as u32
     }
 
     fn new(spec: Self::Spec) -> Self {
         let image = get_image(METHOD_PATH);
-        let session = None;
+
+        let guest_input = (spec, vec![0u8; 32]);
+        let env = ExecutorEnv::builder()
+            .write(&guest_input)
+            .unwrap()
+            .build()
+            .unwrap();
+
+        let session = Session::new(vec![], vec![], ExitCode::Halted(0));
+        let prover = Rc::new(LocalProver::new("local"));
 
         Job {
             spec,
+            env,
             image,
             session,
+            prover,
         }
     }
 
@@ -93,25 +106,14 @@ impl Benchmark for Job {
     }
 
     fn exec_compute(&mut self) -> (u32, u32, Duration) {
-        let guest_input = (self.spec, vec![0u8; 32]);
-        let env = ExecutorEnv::builder()
-            .write(&guest_input)
-            .unwrap()
-            .build()
-            .unwrap();
-
-        let mut exec = ExecutorImpl::new(env, self.image.clone()).unwrap();
-        let start = Instant::now();
-        let session = exec.run().unwrap();
-        let elapsed = start.elapsed();
-        let segments = session.resolve().unwrap();
-        let (exec_cycles, prove_cycles) = get_cycles(segments);
-        self.session = Some(session);
-        (prove_cycles as u32, exec_cycles as u32, elapsed)
+        let (cycles, insn_cycles, elapsed, session) =
+            exec_compute(self.image.clone(), self.env.clone());
+        self.session = session;
+        (cycles, insn_cycles, elapsed)
     }
 
     fn guest_compute(&mut self) -> (Self::ComputeOut, Self::ProofType) {
-        let receipt = self.session.as_ref().unwrap().prove().expect("receipt");
+        let receipt = self.session.prove().expect("receipt");
         let result = receipt.journal.decode().unwrap();
         (result, receipt)
     }
@@ -129,7 +131,7 @@ impl Benchmark for Job {
     }
 }
 
-impl BenchmarkAverage for Job {
+impl BenchmarkAverage for Job<'_> {
     const NAME: &'static str = "blake2b";
     type Spec = u32;
 
@@ -139,12 +141,23 @@ impl BenchmarkAverage for Job {
 
     fn new(spec: Self::Spec) -> Self {
         let image = get_image(METHOD_PATH);
-        let session = None;
+
+        let guest_input = (spec, vec![0u8; 32]);
+        let env = ExecutorEnv::builder()
+            .write(&guest_input)
+            .unwrap()
+            .build()
+            .unwrap();
+
+        let session = Session::new(vec![], vec![], ExitCode::Halted(0));
+        let prover = default_prover();
 
         Job {
             spec,
+            env,
             image,
             session,
+            prover,
         }
     }
 
@@ -152,25 +165,14 @@ impl BenchmarkAverage for Job {
         &self.spec
     }
 
-    fn guest_compute(&mut self) -> Duration {
-        let guest_input = (self.spec, vec![0u8; 32]);
-        let env = ExecutorEnv::builder()
-            .write(&guest_input)
-            .unwrap()
-            .build()
-            .unwrap();
-
-        let prover = default_prover();
-        let start = Instant::now();
-        prover
+    fn guest_compute(&mut self) -> () {
+        self.prover
             .prove(
-                env,
+                self.env.clone(),
                 &VerifierContext::default(),
                 &ProverOpts::default(),
                 self.image.clone(),
             )
             .expect("receipt");
-        let elapsed = start.elapsed();
-        elapsed
     }
 }

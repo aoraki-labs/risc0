@@ -7,9 +7,7 @@ This `hello-world` demo is a minimal application for the RISC Zero [zkVM], desig
 For a step-by-step guide to building your first zkVM application, we recommend [this tutorial].
 
 ## Quick Start
-
-First, follow the [installation guide] if you don't already have the RISC Zero tools installed.
-
+First, [install Rust] if you don't already have it.
 Then, run the example with:
 ```bash
 cargo run --release
@@ -17,7 +15,7 @@ cargo run --release
 
 Congratulations! You just constructed a zero-knowledge proof that you know the factors of 391.
 
-[installation guide]: https://dev.risczero.com/api/zkvm/quickstart
+[install Rust]: https://doc.rust-lang.org/cargo/getting-started/installation.html
 
 ## Use Cases
 

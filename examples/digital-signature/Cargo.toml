@@ -7,17 +7,16 @@ edition = "2021"
 clap = "3.1"
 digital-signature-core = { path = "core" }
 digital-signature-methods = { path = "methods" }
+env_logger = "0.10"
+log = "0.4"
 risc0-zkvm = { path = "../../risc0/zkvm" }
 serde = "1.0"
 sha2 = "0.10"
-tracing = { version = "0.1", features = ["log"] }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
-test-log = { version = "0.2", default-features = false, features = ["trace"] }
+test-log = "0.2"
 
 [features]
-default = []
 cuda = ["risc0-zkvm/cuda"]
-prove = ["risc0-zkvm/cuda"]
-profiler = ["risc0-zkvm/profiler"]
+default = []
+metal = ["risc0-zkvm/metal"]

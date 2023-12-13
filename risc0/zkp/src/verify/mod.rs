@@ -33,7 +33,6 @@ use crate::{
 };
 
 #[derive(PartialEq)]
-#[non_exhaustive]
 pub enum VerificationError {
     ReceiptFormatError,
     ControlVerificationError,
@@ -145,7 +144,7 @@ where
         let mut tap_cache = self.tap_cache.borrow_mut();
         if let Some(ref c) = &mut *tap_cache {
             if c.taps != taps || c.mix != mix {
-                // tracing::debug!("Resetting tap cache");
+                // log::debug!("Resetting tap cache");
                 tap_cache.take();
             }
         }
@@ -226,7 +225,7 @@ where
         assert!(self.po2 as usize <= MAX_CYCLES_PO2);
         let size = 1 << self.po2;
         let domain = INV_RATE * size;
-        // tracing::debug!("size = {size}, po2 = {po2}");
+        // log::debug!("size = {size}, po2 = {po2}");
 
         // Get taps and compute sizes
         let code_size = taps.group_size(REGISTER_GROUP_CODE);
@@ -236,9 +235,9 @@ where
         // Get merkle root for the code merkle tree.
         // The code merkle tree contains the control instructions for the zkVM.
         #[cfg(not(target_os = "zkvm"))]
-        tracing::debug!("code_merkle");
+        log::debug!("code_merkle");
         let code_merkle = MerkleTreeVerifier::new(&mut iop, hashfn, domain, code_size, QUERIES);
-        // tracing::debug!("codeRoot = {}", code_merkle.root());
+        // log::debug!("codeRoot = {}", code_merkle.root());
         check_code(self.po2, code_merkle.root())?;
 
         // Get merkle root for the data merkle tree.
@@ -246,13 +245,13 @@ where
         // including memory accesses as well as the permutation of those memory
         // accesses sorted by location used by PLONK.
         #[cfg(not(target_os = "zkvm"))]
-        tracing::debug!("data_merkle");
+        log::debug!("data_merkle");
         let data_merkle = MerkleTreeVerifier::new(&mut iop, hashfn, domain, data_size, QUERIES);
-        // tracing::debug!("dataRoot = {}", data_merkle.root());
+        // log::debug!("dataRoot = {}", data_merkle.root());
 
         // Prep accumulation
         #[cfg(not(target_os = "zkvm"))]
-        tracing::debug!("accumulate");
+        log::debug!("accumulate");
         // Fill in accum mix
         self.mix = (0..C::MIX_SIZE).map(|_| iop.random_elem()).collect();
 
@@ -266,24 +265,24 @@ where
         // values (see PLOOKUP paper for details). This permutation is used to
         // implement a look-up table.
         #[cfg(not(target_os = "zkvm"))]
-        tracing::debug!("accum_merkle");
+        log::debug!("accum_merkle");
         let accum_merkle = MerkleTreeVerifier::new(&mut iop, hashfn, domain, accum_size, QUERIES);
-        // tracing::debug!("accumRoot = {}", accum_merkle.root());
+        // log::debug!("accumRoot = {}", accum_merkle.root());
 
         // Get a pseudorandom value with which to mix the constraint polynomials.
         // See DEEP-ALI protocol from DEEP-FRI paper for details on constraint mixing.
         let poly_mix = iop.random_ext_elem();
 
         #[cfg(not(target_os = "zkvm"))]
-        tracing::debug!("check_merkle");
+        log::debug!("check_merkle");
         let check_merkle =
             MerkleTreeVerifier::new(&mut iop, hashfn, domain, Self::CHECK_SIZE, QUERIES);
-        // tracing::debug!("checkRoot = {}", check_merkle.root());
+        // log::debug!("checkRoot = {}", check_merkle.root());
 
         // Get a pseudorandom DEEP query point
         // See DEEP-ALI protocol from DEEP-FRI paper for details on DEEP query.
         let z = iop.random_ext_elem();
-        // tracing::debug!("Z = {z:?}");
+        // log::debug!("Z = {z:?}");
         let back_one = F::Elem::ROU_REV[self.po2 as usize];
 
         // Read the U coeffs (the interpolations of the taps) + commit their hash.
@@ -308,7 +307,7 @@ where
         // Compute the core constraint polynomial.
         // I.e. the set of all constraints mixed by poly_mix
         #[cfg(not(target_os = "zkvm"))]
-        tracing::debug!("> compute_polynomial");
+        log::debug!("> compute_polynomial");
         // let result = self.compute_polynomial(&eval_u, poly_mix);
         let result = self
             .circuit
@@ -316,8 +315,8 @@ where
             .tot;
 
         #[cfg(not(target_os = "zkvm"))]
-        tracing::debug!("< compute_polynomial");
-        // tracing::debug!("Result = {result:?}");
+        log::debug!("< compute_polynomial");
+        // log::debug!("Result = {result:?}");
 
         // Now generate the check polynomial
         // TODO: This currently treats the extension degree as hardcoded at 4, with
@@ -345,14 +344,14 @@ where
         }
         let three = F::Elem::from_u64(3);
         check *= (F::ExtElem::from_subfield(&three) * z).pow(size) - F::ExtElem::ONE;
-        // tracing::debug!("Check = {check:?}");
+        // log::debug!("Check = {check:?}");
         if check != result {
             return Err(VerificationError::InvalidProof);
         }
 
         // Set the mix mix value, pseudorandom value used for FRI batching
         let mix = iop.random_ext_elem();
-        // tracing::debug!("mix = {mix:?}");
+        // log::debug!("mix = {mix:?}");
 
         // Make the mixed U polynomials.
         // combo_u has one element for each column with the same set of taps.
@@ -377,7 +376,7 @@ where
             taps.reg_count(),
             "Miscalculated capacity for tap_mix_pows"
         );
-        // tracing::debug!("cur_mix: {cur_mix:?}, cur_pos: {cur_pos}");
+        // log::debug!("cur_mix: {cur_mix:?}, cur_pos: {cur_pos}");
         // Handle check group
         let mut check_mix_pows = Vec::with_capacity(Self::CHECK_SIZE);
         for _ in 0..Self::CHECK_SIZE {
@@ -391,12 +390,12 @@ where
             Self::CHECK_SIZE,
             "Miscalculated capacity for check_mix_pows"
         );
-        // tracing::debug!("cur_mix: {cur_mix:?}");
+        // log::debug!("cur_mix: {cur_mix:?}");
 
         let gen = <F::Elem as RootsOfUnity>::ROU_FWD[log2_ceil(domain)];
-        // tracing::debug!("FRI-verify, size = {size}");
+        // log::debug!("FRI-verify, size = {size}");
         self.fri_verify(&mut iop, size, |iop, idx| {
-            // tracing::debug!("fri_verify");
+            // log::debug!("fri_verify");
             let x = gen.pow(idx);
             let rows = [
                 accum_merkle.verify(iop, hashfn, idx)?,

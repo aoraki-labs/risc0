@@ -22,8 +22,6 @@
 #define CELLS_RATE 16
 #define CELLS_OUT 8
 
-namespace poseidon {
-
 __device__ void add_round_constants(const Fp* ROUND_CONSTANTS, Fp* cells, uint round) {
   for (uint i = 0; i < CELLS; i++) {
     cells[i] += ROUND_CONSTANTS[round * CELLS + i];
@@ -108,8 +106,6 @@ __device__ void poseidon_mix(const Fp* ROUND_CONSTANTS,
   }
 }
 
-}
-
 extern "C" __global__ void poseidon_fold(const Fp* ROUND_CONSTANTS,
                      const Fp* MDS,
                      const Fp* PARTIAL_COMP_MATRIX,
@@ -124,7 +120,7 @@ extern "C" __global__ void poseidon_fold(const Fp* ROUND_CONSTANTS,
     cells[i] = input[2 * gid * CELLS_OUT + i];
     cells[CELLS_OUT + i] = input[(2 * gid + 1) * CELLS_OUT + i];
   }
-  poseidon::poseidon_mix(ROUND_CONSTANTS, MDS, PARTIAL_COMP_MATRIX, PARTIAL_COMP_OFFSET, cells);
+  poseidon_mix(ROUND_CONSTANTS, MDS, PARTIAL_COMP_MATRIX, PARTIAL_COMP_OFFSET, cells);
   for (uint i = 0; i < CELLS_OUT; i++) {
     output[gid * CELLS_OUT + i] = cells[i];
   }
@@ -145,12 +141,12 @@ extern "C" __global__ void poseidon_rows(const Fp* ROUND_CONSTANTS,
   for (uint i = 0; i < col_size; i++) {
     cells[used++] += matrix[i * count + gid];
     if (used == CELLS_RATE) {
-      poseidon::poseidon_mix(ROUND_CONSTANTS, MDS, PARTIAL_COMP_MATRIX, PARTIAL_COMP_OFFSET, cells);
+      poseidon_mix(ROUND_CONSTANTS, MDS, PARTIAL_COMP_MATRIX, PARTIAL_COMP_OFFSET, cells);
       used = 0;
     }
   }
   if (used != 0 || count == 0) {
-    poseidon::poseidon_mix(ROUND_CONSTANTS, MDS, PARTIAL_COMP_MATRIX, PARTIAL_COMP_OFFSET, cells);
+    poseidon_mix(ROUND_CONSTANTS, MDS, PARTIAL_COMP_MATRIX, PARTIAL_COMP_OFFSET, cells);
   }
   for (uint i = 0; i < CELLS_OUT; i++) {
     out[CELLS_OUT * gid + i] = cells[i];

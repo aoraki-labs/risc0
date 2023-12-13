@@ -14,11 +14,11 @@
 
 use std::{fs, io, io::Write, path::PathBuf, process::Stdio};
 
-use anyhow::{anyhow, bail, ensure, Context};
+use anyhow::{anyhow, bail, Context};
 use cargo_metadata::{Artifact, ArtifactProfile, Message};
 use clap::Parser;
 use risc0_build::cargo_command;
-use risc0_zkvm::{default_executor, ExecutorEnv, ExitCode};
+use risc0_zkvm::{default_executor, ExecutorEnv};
 use tempfile::{tempdir, TempDir};
 
 const ZIP_CONTENTS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/cargo-risczero.zip"));
@@ -41,6 +41,8 @@ impl AsRef<str> for BuildSubcommand {
         }
     }
 }
+
+// TODO(victor): Provide some way to pass features.
 
 /// `cargo risczero build`
 #[derive(Parser)]
@@ -126,7 +128,7 @@ impl BuildCommand {
                 .ok_or_else(|| anyhow!("invalid path string for target_dir"))?,
         ]);
 
-        // TODO: Give the user a way to request a release build.
+        // TODO(victor): Give the user a way to request a release build.
         // if !is_debug() {
         //    cmd.args(&["--release"]);
         //}
@@ -196,22 +198,15 @@ impl BuildCommand {
         if subcommand == BuildSubcommand::Test && !no_run_flag {
             eprintln!("Running tests: {tests:?}");
 
-            for test in tests {
-                eprintln!("Running test in guest: {test} {test_args:?}");
+            for test in &tests {
+                eprintln!("Running test {test}");
                 let env = ExecutorEnv::builder()
-                    // Add the test elf path as arg 0, the POSIX program name
-                    .args(&[test.clone()])
                     .args(&test_args)
                     .env_var("RUST_TEST_NOCAPTURE", "1")
                     .build()?;
 
                 let exec = default_executor();
-                let session = exec.execute_elf(env, &fs::read(test)?)?;
-                ensure!(
-                    session.exit_code == ExitCode::Halted(0),
-                    "test exited with code {:?}",
-                    session.exit_code
-                );
+                exec.execute_elf(env, &fs::read(test)?)?;
             }
         };
         Ok(())

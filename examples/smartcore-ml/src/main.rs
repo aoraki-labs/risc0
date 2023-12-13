@@ -14,10 +14,13 @@
 
 use risc0_zkvm::{default_prover, ExecutorEnv};
 use serde_json;
+// use std::time::Instant;
+// use itertools::Itertools;
 use smartcore::{
     linalg::basic::matrix::DenseMatrix, tree::decision_tree_classifier::DecisionTreeClassifier,
 };
 use smartcore_ml_methods::ML_TEMPLATE_ELF;
+use smartcore_ml::generate_proof_test;
 
 // The serialized trained model and input data are embedded from files
 // corresponding paths listed below. Alternatively, the model can be trained in
@@ -29,6 +32,9 @@ const JSON_MODEL: &str = include_str!("../res/ml-model/tree_model_bytes.json");
 const JSON_DATA: &str = include_str!("../res/input-data/tree_model_data_bytes.json");
 
 fn main() {
+    let test = generate_proof_test("7.4,2.8,6.1,1.9".to_string());
+    println!("Prediction recorded in journal is: {:?}",test);
+    generate_proof_test("7.4,2.8,6.1,1.9".to_string());
     let result = predict();
     println!("Prediction recorded in journal is: {:?}", &result);
 }
@@ -67,6 +73,8 @@ fn predict() -> Vec<u32> {
     // ```
     // RISC0_DEV_MODE=1 cargo run -r
     // ```
+    // let time_started = Instant::now();
+
     let prover = default_prover();
 
     // This initiates a session, runs the STARK prover on the resulting exection
@@ -77,6 +85,7 @@ fn predict() -> Vec<u32> {
     // receipt can also be serialized and sent to a verifier.
     receipt.journal.decode().unwrap()
 }
+
 
 #[cfg(test)]
 mod test {

@@ -95,7 +95,7 @@ impl<'a, H: Hal> Prover<'a, H> {
 
         group_ref.merkle.commit(&mut self.iop);
 
-        tracing::debug!(
+        log::debug!(
             "{} group root: {}",
             self.taps.group_name(tap_group_index),
             group_ref.merkle.root()
@@ -138,7 +138,7 @@ impl<'a, H: Hal> Prover<'a, H> {
         check_poly.view(|check_out| {
             for i in (0..domain).step_by(4) {
                 if check_out[i] != H::Elem::ZERO {
-                    tracing::debug!("check[{}] =  {:?}", i, check_out[i]);
+                    log::debug!("check[{}] =  {:?}", i, check_out[i]);
                 }
             }
         });
@@ -164,7 +164,7 @@ impl<'a, H: Hal> Prover<'a, H> {
         // Make the PolyGroup + add it to the IOP;
         let check_group = PolyGroup::new(self.hal, check_poly, H::CHECK_SIZE, self.cycles, "check");
         check_group.merkle.commit(&mut self.iop);
-        tracing::debug!("checkGroup: {}", check_group.merkle.root());
+        log::debug!("checkGroup: {}", check_group.merkle.root());
 
         // Now pick a value for Z, which is used as the DEEP-ALI query point.
         let z = self.iop.random_ext_elem();
@@ -238,7 +238,7 @@ impl<'a, H: Hal> Prover<'a, H> {
             coeff_u.extend(view);
         });
 
-        tracing::debug!("Size of U = {}", coeff_u.len());
+        log::debug!("Size of U = {}", coeff_u.len());
         self.iop.write_field_elem_slice(&coeff_u);
         let hash_u = self
             .hal
@@ -249,7 +249,7 @@ impl<'a, H: Hal> Prover<'a, H> {
 
         // Set the mix mix value, which is used for FRI batching.
         let mix = self.iop.random_ext_elem();
-        tracing::debug!("Mix = {mix:?}");
+        log::debug!("Mix = {mix:?}");
 
         // Do the coefficent mixing
         // Begin by making a zeroed output buffer
@@ -345,7 +345,7 @@ impl<'a, H: Hal> Prover<'a, H> {
 
         // Finally do the FRI protocol to prove the degree of the polynomial
         self.hal.batch_bit_reverse(&final_poly_coeffs, ext_size);
-        tracing::debug!("FRI-proof, size = {}", final_poly_coeffs.size() / ext_size);
+        log::debug!("FRI-proof, size = {}", final_poly_coeffs.size() / ext_size);
 
         fri_prove(self.hal, &mut self.iop, &final_poly_coeffs, |iop, idx| {
             for pg in self.groups.iter() {
@@ -357,7 +357,7 @@ impl<'a, H: Hal> Prover<'a, H> {
 
         // Return final proof
         let proof = self.iop.proof;
-        tracing::debug!("Proof size = {}", proof.len());
+        log::debug!("Proof size = {}", proof.len());
         proof
     }
 }

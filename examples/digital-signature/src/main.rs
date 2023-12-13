@@ -14,14 +14,11 @@
 
 use clap::{Arg, Command};
 use digital_signature::sign;
+use log::LevelFilter;
 use sha2::{Digest, Sha256};
 
-use tracing_subscriber::EnvFilter;
-
 fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
+    env_logger::builder().filter_level(LevelFilter::Info).init();
 
     let matches = Command::new("sign")
         .version("0.1.0")
@@ -40,25 +37,25 @@ fn main() {
     let passphrase = matches.value_of("passphrase").unwrap();
     let signing_receipt = sign(&passphrase, &message).unwrap();
 
-    tracing::info!("Inputs");
-    tracing::info!("\tmessage: {:?}", &message);
-    tracing::info!("Commitment:");
-    tracing::info!("\tmessage: {:?}", &signing_receipt.get_message().unwrap());
-    tracing::info!("\tidentity: {:?}", &signing_receipt.get_identity().unwrap());
-    tracing::info!("Integrity Checks:");
+    log::info!("Inputs");
+    log::info!("\tmessage: {:?}", &message);
+    log::info!("Commitment:");
+    log::info!("\tmessage: {:?}", &signing_receipt.get_message().unwrap());
+    log::info!("\tidentity: {:?}", &signing_receipt.get_identity().unwrap());
+    log::info!("Integrity Checks:");
     let message_hash = &signing_receipt.get_message().unwrap().msg;
     let expected_message_hash = Sha256::digest(message);
     if message_hash != expected_message_hash.as_slice() {
-        tracing::error!("Message commitment does not match given message!");
+        log::error!("Message commitment does not match given message!");
         std::process::exit(1);
     }
-    tracing::info!("\tmessage: valid");
+    log::info!("\tmessage: valid");
     if signing_receipt.verify().is_err() {
-        tracing::error!("Receipt is invalid!");
-        tracing::error!("{}", signing_receipt.verify().unwrap_err());
+        log::error!("Receipt is invalid!");
+        log::error!("{}", signing_receipt.verify().unwrap_err());
         std::process::exit(1);
     }
-    tracing::info!("\treceipt: valid");
+    log::info!("\treceipt: valid");
 }
 
 #[cfg(test)]

@@ -12,31 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use risc0_benchmark_lib::Sudoku;
 use risc0_zkvm::{
     sha::{Digest, DIGEST_WORDS},
-    ExecutorEnv, ExecutorImpl, MemoryImage, Receipt, Session,
+    ExecutorEnv, ExitCode, MemoryImage, Receipt, Session,
 };
 
-use crate::{get_cycles, get_image, Benchmark};
+use crate::{exec_compute, get_image, Benchmark};
 
-pub struct Job {
+pub struct Job<'a> {
     pub spec: u32,
+    pub env: ExecutorEnv<'a>,
     pub image: MemoryImage,
-    pub input: Sudoku,
-    pub session: Option<Session>,
+    pub session: Session,
 }
 
-pub fn new_jobs() -> Vec<<Job as Benchmark>::Spec> {
+pub fn new_jobs() -> Vec<<Job<'static> as Benchmark>::Spec> {
     vec![1]
 }
 
 const METHOD_ID: [u32; DIGEST_WORDS] = risc0_benchmark_methods::SUDOKU_ID;
 const METHOD_PATH: &'static str = risc0_benchmark_methods::SUDOKU_PATH;
 
-impl Benchmark for Job {
+impl Benchmark for Job<'_> {
     const NAME: &'static str = "sudoku";
     type Spec = u32;
     type ComputeOut = Digest;
@@ -53,9 +53,8 @@ impl Benchmark for Job {
     fn proof_size_bytes(proof: &Self::ProofType) -> u32 {
         (proof
             .inner
-            .composite()
+            .flat()
             .unwrap()
-            .segments
             .iter()
             .fold(0, |acc, segment| acc + segment.get_seal_bytes().len())) as u32
     }
@@ -73,11 +72,18 @@ impl Benchmark for Job {
             [2, 8, 7, 4, 1, 9, 6, 3, 5],
             [3, 4, 5, 2, 8, 6, 1, 7, 9],
         ]);
-        let session = None;
+
+        let env = ExecutorEnv::builder()
+            .write(&input)
+            .unwrap()
+            .build()
+            .unwrap();
+
+        let session = Session::new(vec![], vec![], ExitCode::Halted(0));
 
         Job {
             spec,
-            input,
+            env,
             image,
             session,
         }
@@ -88,23 +94,14 @@ impl Benchmark for Job {
     }
 
     fn exec_compute(&mut self) -> (u32, u32, Duration) {
-        let env = ExecutorEnv::builder()
-            .write(&self.input)
-            .unwrap()
-            .build()
-            .unwrap();
-        let mut exec = ExecutorImpl::new(env, self.image.clone()).unwrap();
-        let start = Instant::now();
-        let session = exec.run().unwrap();
-        let elapsed = start.elapsed();
-        let segments = session.resolve().unwrap();
-        let (exec_cycles, prove_cycles) = get_cycles(segments);
-        self.session = Some(session);
-        (prove_cycles as u32, exec_cycles as u32, elapsed)
+        let (cycles, insn_cycles, elapsed, session) =
+            exec_compute(self.image.clone(), self.env.clone());
+        self.session = session;
+        (cycles, insn_cycles, elapsed)
     }
 
     fn guest_compute(&mut self) -> (Self::ComputeOut, Self::ProofType) {
-        let receipt = self.session.as_ref().unwrap().prove().expect("receipt");
+        let receipt = self.session.prove().expect("receipt");
         let result = receipt.journal.decode().unwrap();
         (result, receipt)
     }

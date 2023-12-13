@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{ops::Not, path::Path};
+use std::path::Path;
 
 use anyhow::{anyhow, bail, Result};
 use bytes::Bytes;
@@ -24,12 +24,8 @@ use super::{
 };
 use crate::{
     get_version,
-    host::{
-        api::SegmentInfo,
-        client::prove::get_r0vm_path,
-        receipt::{SegmentReceipt, SuccinctReceipt},
-    },
-    ExecutorEnv, Journal, ProverOpts, Receipt,
+    host::{api::SegmentInfo, client::prove::get_r0vm_path, recursion::SuccinctReceipt},
+    ExecutorEnv, Journal, ProverOpts, Receipt, SegmentReceipt,
 };
 
 /// A client implementation for interacting with a zkVM server.
@@ -107,7 +103,7 @@ impl Client {
         env: &ExecutorEnv<'_>,
         binary: Binary,
         segments_out: AssetRequest,
-        segment_callback: F,
+        callback: F,
     ) -> Result<SessionInfo>
     where
         F: FnMut(SegmentInfo, Asset) -> Result<()>,
@@ -122,10 +118,10 @@ impl Client {
                 },
             )),
         };
-        tracing::trace!("tx: {request:?}");
+        log::debug!("tx: {request:?}");
         conn.send(request)?;
 
-        let result = self.execute_handler(segment_callback, &mut conn, env);
+        let result = self.execute_handler(callback, &mut conn, env);
 
         let code = conn.close()?;
         if code != 0 {
@@ -153,7 +149,7 @@ impl Client {
                 },
             )),
         };
-        tracing::trace!("tx: {request:?}");
+        log::debug!("tx: {request:?}");
         conn.send(request)?;
 
         let reply: pb::api::ProveSegmentReply = conn.recv()?;
@@ -191,7 +187,7 @@ impl Client {
                 receipt_out: Some(receipt_out.try_into()?),
             })),
         };
-        tracing::trace!("tx: {request:?}");
+        log::debug!("tx: {request:?}");
         conn.send(request)?;
 
         let reply: pb::api::LiftReply = conn.recv()?;
@@ -231,7 +227,7 @@ impl Client {
                 receipt_out: Some(receipt_out.try_into()?),
             })),
         };
-        tracing::trace!("tx: {request:?}");
+        log::debug!("tx: {request:?}");
         conn.send(request)?;
 
         let reply: pb::api::JoinReply = conn.recv()?;
@@ -271,7 +267,7 @@ impl Client {
                 },
             )),
         };
-        tracing::trace!("tx: {request:?}");
+        log::debug!("tx: {request:?}");
         conn.send(request)?;
 
         let reply: pb::api::IdentityP254Reply = conn.recv()?;
@@ -300,11 +296,11 @@ impl Client {
         let request = pb::api::HelloRequest {
             version: Some(client_version.clone().into()),
         };
-        tracing::trace!("tx: {request:?}");
+        log::debug!("tx: {request:?}");
         conn.send(request)?;
 
         let reply: pb::api::HelloReply = conn.recv()?;
-        tracing::trace!("rx: {reply:?}");
+        log::debug!("rx: {reply:?}");
         match reply.kind.ok_or(malformed_err())? {
             pb::api::hello_reply::Kind::Ok(reply) => {
                 let server_version: semver::Version = reply
@@ -314,13 +310,13 @@ impl Client {
                     .map_err(|err: semver::Error| anyhow!(err))?;
                 if !check_server_version(&client_version, &server_version) {
                     let msg = format!("incompatible server version: {server_version}");
-                    tracing::warn!("{msg}");
+                    log::debug!("{msg}");
                     bail!(msg);
                 }
             }
             pb::api::hello_reply::Kind::Error(err) => {
                 let code = conn.close()?;
-                tracing::debug!("Child finished with: {code}");
+                log::debug!("Child finished with: {code}");
                 bail!(err);
             }
         }
@@ -336,37 +332,35 @@ impl Client {
         pb::api::ExecutorEnv {
             binary: Some(binary),
             env_vars: env.env_vars.clone(),
-            args: env.args.clone(),
             slice_ios: env.slice_io.borrow().inner.keys().cloned().collect(),
             read_fds: env.posix_io.borrow().read_fds.keys().cloned().collect(),
             write_fds: env.posix_io.borrow().write_fds.keys().cloned().collect(),
             segment_limit_po2: env.segment_limit_po2,
             session_limit: env.session_limit,
-            trace_events: env.trace.is_empty().not().then_some(()),
         }
     }
 
     fn execute_handler<F>(
         &self,
-        segment_callback: F,
+        callback: F,
         conn: &mut ConnectionWrapper,
         env: &ExecutorEnv<'_>,
     ) -> Result<SessionInfo>
     where
         F: FnMut(SegmentInfo, Asset) -> Result<()>,
     {
-        let mut segment_callback = segment_callback;
+        let mut callback = callback;
         let mut segments = Vec::new();
         loop {
             let reply: pb::api::ServerReply = conn.recv()?;
-            tracing::trace!("rx: {reply:?}");
+            log::debug!("rx: {reply:?}");
 
             match reply.kind.ok_or(malformed_err())? {
                 pb::api::server_reply::Kind::Ok(request) => {
                     match request.kind.ok_or(malformed_err())? {
                         pb::api::client_callback::Kind::Io(io) => {
                             let msg: pb::api::OnIoReply = self.on_io(env, io).into();
-                            tracing::trace!("tx: {msg:?}");
+                            log::debug!("tx: {msg:?}");
                             conn.send(msg)?;
                         }
                         pb::api::client_callback::Kind::SegmentDone(segment) => {
@@ -382,11 +376,11 @@ impl Client {
                                             cycles: segment.cycles,
                                         };
                                         segments.push(info.clone());
-                                        segment_callback(info, asset)
+                                        callback(info, asset)
                                     },
                                 )
                                 .into();
-                            tracing::trace!("tx: {reply:?}");
+                            log::debug!("tx: {reply:?}");
                             conn.send(reply)?;
                         }
                         pb::api::client_callback::Kind::SessionDone(session) => {
@@ -419,14 +413,12 @@ impl Client {
     ) -> Result<pb::api::Asset> {
         loop {
             let reply: pb::api::ServerReply = conn.recv()?;
-            tracing::trace!("rx: {reply:?}");
-
             match reply.kind.ok_or(malformed_err())? {
                 pb::api::server_reply::Kind::Ok(request) => {
                     match request.kind.ok_or(malformed_err())? {
                         pb::api::client_callback::Kind::Io(io) => {
                             let msg: pb::api::OnIoReply = self.on_io(env, io).into();
-                            tracing::trace!("tx: {msg:?}");
+                            log::debug!("tx: {msg:?}");
                             conn.send(msg)?;
                         }
                         pb::api::client_callback::Kind::SegmentDone(_) => {
@@ -470,8 +462,9 @@ impl Client {
     }
 
     fn on_posix_read(&self, env: &ExecutorEnv<'_>, fd: u32, nread: usize) -> Result<Bytes> {
-        tracing::debug!("on_posix_read: {fd}, {nread}");
-        let mut from_host = vec![0; nread];
+        log::debug!("on_posix_read: {fd}, {nread}");
+        let mut from_host = Vec::with_capacity(nread);
+        from_host.resize(nread, 0);
         let posix_io = env.posix_io.borrow();
         let reader = posix_io
             .read_fds
@@ -483,7 +476,7 @@ impl Client {
     }
 
     fn on_posix_write(&self, env: &ExecutorEnv<'_>, fd: u32, from_guest: Bytes) -> Result<()> {
-        tracing::debug!("on_posix_write: {fd}");
+        log::debug!("on_posix_write: {fd}");
         let posix_io = env.posix_io.borrow();
         let writer = posix_io
             .write_fds
@@ -504,10 +497,8 @@ impl Client {
     }
 
     fn on_trace(&self, env: &ExecutorEnv<'_>, event: pb::api::TraceEvent) -> Result<()> {
-        for trace_callback in env.trace.iter() {
-            trace_callback
-                .borrow_mut()
-                .trace_callback(event.clone().try_into()?)?;
+        if let Some(ref trace_callback) = env.trace {
+            trace_callback.borrow_mut()(event.try_into()?)?;
         }
         Ok(())
     }

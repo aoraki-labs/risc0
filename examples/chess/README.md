@@ -10,7 +10,14 @@ The demo uses the [shakmaty] crate to prove that a chess position has a checkmat
 
 ## Quick Start
 
-First, follow the [installation guide] if you don't already have the RISC Zero tools installed.
+First, [install Rust] if you don't already have it.
+
+Next, install the `cargo-risczero` tool and install the toolchain with:
+```bash
+cargo install cargo-binstall
+cargo binstall cargo-risczero
+cargo risczero install
+```
 
 Then, run the example with:
 ```bash
@@ -19,8 +26,8 @@ cargo run --release
 
 Congratulations! You just constructed a zero-knowledge proof that the position defined [here] includes a mate-in-one.
 
-[installation guide]: https://dev.risczero.com/api/zkvm/quickstart
-[here]: https://github.com/risc0/risc0/blob/main/examples/chess/src/main.rs#L29
+[install Rust]: https://doc.rust-lang.org/cargo/getting-started/installation.html
+[here](https://github.com/risc0/risc0/blob/main/examples/chess/src/main.rs#L29)
 
 ## Use Cases
 

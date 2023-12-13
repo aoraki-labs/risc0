@@ -62,10 +62,7 @@ struct Args {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::filter::EnvFilter::from_default_env())
-        .init();
-    ();
+    env_logger::init();
 
     let args = Args::parse();
 

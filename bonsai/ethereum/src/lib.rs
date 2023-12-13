@@ -18,25 +18,18 @@
 
 use ethers::prelude::*;
 
-abigen!(IBonsaiRelay, "$OUT_DIR/IBonsaiRelay.sol/IBonsaiRelay.json");
-abigen!(BonsaiRelay, "$OUT_DIR/BonsaiRelay.sol/BonsaiRelay.json");
+abigen!(IBonsaiRelay, "out/IBonsaiRelay.sol/IBonsaiRelay.json");
+abigen!(BonsaiRelay, "out/BonsaiRelay.sol/BonsaiRelay.json");
 abigen!(
     BonsaiTestRelay,
-    "$OUT_DIR/BonsaiTestRelay.sol/BonsaiTestRelay.json"
+    "out/BonsaiTestRelay.sol/BonsaiTestRelay.json"
 );
 
 abigen!(
     IRiscZeroVerifier,
-    "$OUT_DIR/IRiscZeroVerifier.sol/IRiscZeroVerifier.json"
+    "out/IRiscZeroVerifier.sol/IRiscZeroVerifier.json"
 );
 abigen!(
     RiscZeroGroth16Verifier,
-    "$OUT_DIR/RiscZeroGroth16Verifier.sol/RiscZeroGroth16Verifier.json"
+    "out/RiscZeroGroth16Verifier.sol/RiscZeroGroth16Verifier.json"
 );
-
-pub mod testutils {
-    use ethers::prelude::*;
-
-    abigen!(Counter, "$OUT_DIR/Counter.sol/Counter.json");
-    abigen!(Proxy, "$OUT_DIR/ProxyTest.sol/Proxy.json");
-}
