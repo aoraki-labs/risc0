@@ -34,10 +34,14 @@ const JSON_MODEL: &str = include_str!("../res/ml-model/tree_model_bytes.json");
 const JSON_DATA: &str = include_str!("../res/input-data/tree_model_data_bytes.json");
 
 fn main() {
-    predict();
+    // Prove the task locally
+    prove_locally();
+    
+    // Prove the task using client-server
+    prove_server_side();
 }
 
-fn predict() {
+fn prove_locally() {
     // We set a boolean to establish whether we are using a SVM model.  This will be
     // passed to the guest and is important for execution of the guest code.
     // SVM models require an extra step that is not required of other SmartCore
@@ -131,6 +135,184 @@ fn predict() {
     
 }
 
+
+use std::{
+    net::{SocketAddr, TcpListener},
+    path::PathBuf,
+    thread,
+};
+
+use risc0_zkvm::{Asset, AssetRequest, ConnectionWrapper, Connector, TcpConnection};
+use tempfile::{tempdir, TempDir};
+use risc0_zkvm::{ApiClient, SessionInfo, SuccinctReceipt, ApiServer};
+use anyhow::Result;
+
+
+struct TestClientConnector {
+    listener: TcpListener,
+}
+
+impl TestClientConnector {
+    fn new() -> Result<Self> {
+        Ok(Self {
+            listener: TcpListener::bind("127.0.0.1:0")?,
+        })
+    }
+}
+
+impl Connector for TestClientConnector {
+    fn connect(&self) -> Result<ConnectionWrapper> {
+        let (stream, _) = self.listener.accept()?;
+        Ok(ConnectionWrapper::new(Box::new(TcpConnection::new(stream))))
+    }
+}
+
+struct TestClient {
+    work_dir: TempDir,
+    client: ApiClient,
+    addr: SocketAddr,
+    segments: Vec<Asset>,
+}
+
+impl TestClient {
+    fn new() -> Self {
+        let connector = TestClientConnector::new().unwrap();
+        let addr = connector.listener.local_addr().unwrap();
+        let client = ApiClient::with_connector(Box::new(connector));
+        Self {
+            work_dir: tempdir().unwrap(),
+            client,
+            addr,
+            segments: Vec::new(),
+        }
+    }
+
+    fn get_work_path(&self) -> PathBuf {
+        self.work_dir.path().to_path_buf()
+    }
+
+    fn execute(&mut self, env: ExecutorEnv<'_>, binary: Asset) -> SessionInfo {
+        with_server(self.addr, || {
+            let segments_out = AssetRequest::Path(self.get_work_path());
+            self.client
+                .execute(&env, binary, segments_out, |_info, asset| {
+                    self.segments.push(asset);
+                    Ok(())
+                })
+        })
+    }
+
+    // fn prove(&self, env: ExecutorEnv<'_>, opts: ProverOpts, binary: Asset) -> Receipt {
+    //     with_server(self.addr, || self.client.prove(&env, opts, binary))
+    // }
+
+    fn prove_segment(&self, opts: ProverOpts, segment: Asset) -> SegmentReceipt {
+        with_server(self.addr, || {
+            let receipt_out = AssetRequest::Path(self.get_work_path());
+            self.client.prove_segment(opts, segment, receipt_out)
+        })
+    }
+
+    fn lift(&self, opts: ProverOpts, receipt: Asset) -> SuccinctReceipt {
+        with_server(self.addr, || {
+            let receipt_out = AssetRequest::Path(self.get_work_path());
+            self.client.lift(opts, receipt, receipt_out)
+        })
+    }
+
+    fn join(&self, opts: ProverOpts, left_receipt: Asset, right_receipt: Asset) -> SuccinctReceipt {
+        with_server(self.addr, || {
+            let receipt_out = AssetRequest::Path(self.get_work_path());
+            self.client
+                .join(opts, left_receipt, right_receipt, receipt_out)
+        })
+    }
+
+    fn identity_p254(&self, opts: ProverOpts, receipt: Asset) -> SuccinctReceipt {
+        with_server(self.addr, || {
+            let receipt_out = AssetRequest::Path(self.get_work_path());
+            self.client.identity_p254(opts, receipt, receipt_out)
+        })
+    }
+}
+
+fn with_server<T, F: FnOnce() -> Result<T>>(addr: SocketAddr, f: F) -> T {
+    let addr = addr.to_string();
+    let handle = thread::Builder::new()
+        .name("server".into())
+        .spawn(move || {
+            let server = ApiServer::new_tcp(addr);
+            server.run().unwrap();
+        })
+        .unwrap();
+
+    let result = f().unwrap();
+    handle.join().unwrap();
+    result
+}
+
+
+fn prove_server_side() {
+
+    let is_svm: bool = false;
+
+    // Convert the model and input data from JSON into byte arrays.
+    let model_bytes: Vec<u8> = serde_json::from_str(JSON_MODEL).unwrap();
+    let data_bytes: Vec<u8> = serde_json::from_str(JSON_DATA).unwrap();
+
+    // Deserialize the data from rmp into native rust types.
+    type Model = DecisionTreeClassifier<f64, u32, DenseMatrix<f64>, Vec<u32>>;
+    let model: Model =
+        rmp_serde::from_slice(&model_bytes).expect("model failed to deserialize byte array");
+    let data: DenseMatrix<f64> =
+        rmp_serde::from_slice(&data_bytes).expect("data filed to deserialize byte array");
+
+    // We build the ExecutorEnv struct to pass to the guest.
+    let segment_limit_po2 = 17;
+    println!("segment_limit_po2 {}", segment_limit_po2);
+    let env = ExecutorEnv::builder()
+        .segment_limit_po2(segment_limit_po2)
+        .write(&is_svm)
+        .expect("bool failed to serialize")
+        .write(&model)
+        .expect("model failed to serialize")
+        .write(&data)
+        .expect("data failed to serialize")
+        .build()
+        .unwrap();
+
+    let binary = Asset::Inline(ML_TEMPLATE_ELF.into());
+    let mut client: TestClient = TestClient::new();
+    
+    let session = client.execute(env, binary);
+    assert_eq!(session.segments.len(), client.segments.len());
+    let opts = ProverOpts::default();
+    let receipt = client.prove_segment(opts.clone(), client.segments[0].clone());
+
+    let mut rollup = client.lift(opts.clone(), receipt.try_into().unwrap());
+    for segment in &client.segments[1..] {
+        let start_time: std::time::Instant = std::time::Instant::now();
+        let receipt = client.prove_segment(opts.clone(), segment.clone());
+        let rec_receipt = client.lift(opts.clone(), receipt.try_into().unwrap());
+
+        rollup = client.join(
+            opts.clone(),
+            rollup.try_into().unwrap(),
+            rec_receipt.try_into().unwrap(),
+        );
+        rollup
+            .verify_integrity_with_context(&VerifierContext::default())
+            .unwrap();
+        let elapsed = start_time.elapsed();
+        println!("recursion time = {:?}", elapsed);
+
+    }
+    client.identity_p254(opts, rollup.clone().try_into().unwrap());
+
+    let rollup_receipt = Receipt::new(InnerReceipt::Succinct(rollup), session.journal.bytes.into());
+    rollup_receipt.verify(ML_TEMPLATE_ID).unwrap();
+
+}
 #[cfg(test)]
 mod test {
     use risc0_zkvm::{default_executor, ExecutorEnv};

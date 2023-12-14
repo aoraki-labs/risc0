@@ -15,6 +15,9 @@ smartcore = { git = "https://github.com/risc0/smartcore.git", rev = "4bd3cadd50e
 ] }
 smartcore-ml-methods = { path = "methods" }
 log = "0.4"
+tempfile = "3"
+anyhow = { version = "1.0", default-features = false }
+
 
 [features]
 cuda = ["risc0-zkvm/cuda"]

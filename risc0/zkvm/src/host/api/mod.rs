@@ -62,6 +62,7 @@ pub trait Connection {
     fn try_clone(&self) -> Result<Box<dyn Connection>>;
 }
 
+/// Connects ...
 pub struct ConnectionWrapper {
     inner: Box<dyn Connection>,
     buf: Vec<u8>,
@@ -82,7 +83,8 @@ impl RootMessage for pb::api::IdentityP254Request {}
 impl RootMessage for pb::api::IdentityP254Reply {}
 
 impl ConnectionWrapper {
-    fn new(inner: Box<dyn Connection>) -> Self {
+    /// Connects ...
+    pub fn new(inner: Box<dyn Connection>) -> Self {
         Self {
             inner,
             buf: Vec::new(),
@@ -208,7 +210,8 @@ struct ParentProcessConnection {
     stream: TcpStream,
 }
 
-struct TcpConnection {
+/// Connects ...
+pub struct TcpConnection {
     stream: TcpStream,
 }
 
@@ -234,6 +237,7 @@ impl Connection for ParentProcessConnection {
 }
 
 impl TcpConnection {
+    /// Connects ...
     pub fn new(stream: TcpStream) -> Self {
         Self { stream }
     }

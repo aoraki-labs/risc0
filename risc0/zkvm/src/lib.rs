@@ -58,7 +58,7 @@ pub use self::host::{
 };
 #[cfg(all(not(target_os = "zkvm"), feature = "client"))]
 pub use self::host::{
-    api::{client::Client as ApiClient, Asset, AssetRequest, Connector, SegmentInfo, SessionInfo},
+    api::{client::Client as ApiClient, Asset, AssetRequest, Connector, SegmentInfo, SessionInfo, TcpConnection, ConnectionWrapper},
     client::{
         env::{ExecutorEnv, ExecutorEnvBuilder},
         exec::TraceEvent,
