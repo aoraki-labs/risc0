@@ -26,7 +26,6 @@ const ZKR_ZIP: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/recursion_zkr.z
 /// let encoded_program = risc0_circuit_recursion::zkr::get_zkr("lift_20.zkr").unwrap();
 /// ```
 pub fn get_zkr(name: &str) -> Result<Vec<u32>> {
-    println!("OUT_DIR {}", env!("OUT_DIR"));
     let mut zip = zip::ZipArchive::new(std::io::Cursor::new(ZKR_ZIP)).unwrap();
     let mut f = zip
         .by_name(name)

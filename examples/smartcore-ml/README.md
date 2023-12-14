@@ -1,3 +1,41 @@
+# How to run
+
+1. 把 `risc0/circuit/recursion/src/recursion_zkr.zip` 文件 copy 到该目录下，验证下这个文件大小 ~23M
+2. 运行 `RUST_BACKTRACE=1 OUT_DIR="./" cargo run --package smartcore-ml --bin smartcore-ml`
+
+# Profiling
+
+```
+segment_limit_po2 17
+answer: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]
+
+Total cycles for guest code execution: 558675
+
+executor total_cycles = 81628
+executor segment_count = 5
+executor execution_time = 138.419348ms
+
+Got 5 segments.
+Proving rv32im
+segment prove time = 47.103492275s
+segment prove time = 46.900811257s
+segment prove time = 46.937412905s
+segment prove time = 46.8924398s
+segment prove time = 46.640596884s
+Done proving rv32im
+
+lift time = 56.360410268s
+recursion time = 116.864705083s
+recursion time = 112.906106679s
+recursion time = 110.661175852s
+recursion time = 110.701365267s
+
+Rollup receipt verified successfully!
+
+```
+
+
+
 # RISC Zero Rust SmartCore Machine Learning Template
 
 This template is intended to give you a framework for using the RISC Zero ZKVM to perform verifiable inference using machine learning models from the Rust SmartCore library.  The following models are currently supported:
