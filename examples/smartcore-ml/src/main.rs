@@ -19,8 +19,8 @@ use serde_json;
 use smartcore::{
     linalg::basic::matrix::DenseMatrix, tree::decision_tree_classifier::DecisionTreeClassifier,
 };
+use smartcore_ml::{generate_proof_test, generate_segment_proof};
 use smartcore_ml_methods::ML_TEMPLATE_ELF;
-use smartcore_ml::generate_proof_test;
 
 // The serialized trained model and input data are embedded from files
 // corresponding paths listed below. Alternatively, the model can be trained in
@@ -31,10 +31,14 @@ use smartcore_ml::generate_proof_test;
 const JSON_MODEL: &str = include_str!("../res/ml-model/tree_model_bytes.json");
 const JSON_DATA: &str = include_str!("../res/input-data/tree_model_data_bytes.json");
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let test = generate_proof_test("7.4,2.8,6.1,1.9".to_string());
-    println!("Prediction recorded in journal is: {:?}",test);
-    generate_proof_test("7.4,2.8,6.1,1.9".to_string());
+    println!("Prediction recorded in journal is: {:?}", test);
+    //Start to loop for split id = 0...4, call generate_segment_proof("7.4,2.8,6.1,1.9", split_id:String)
+    for i in 0..5 {
+        generate_segment_proof("7.4,2.8,6.1,1.9".to_string(), i.to_string()).await;
+    }
     let result = predict();
     println!("Prediction recorded in journal is: {:?}", &result);
 }
@@ -85,7 +89,6 @@ fn predict() -> Vec<u32> {
     // receipt can also be serialized and sent to a verifier.
     receipt.journal.decode().unwrap()
 }
-
 
 #[cfg(test)]
 mod test {

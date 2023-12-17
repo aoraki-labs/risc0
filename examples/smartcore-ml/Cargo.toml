@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-risc0-zkvm = { path = "../../risc0/zkvm" }
+risc0-zkvm = { path = "../../risc0/zkvm", features = ["prove",]}
 rmp-serde = "1.1"
 serde_json = "1.0"
 polars = "0.35.4"
@@ -18,6 +18,7 @@ smartcore-ml-methods = { path = "methods" }
 cuda = ["risc0-zkvm/cuda"]
 default = []
 metal = ["risc0-zkvm/metal"]
+prove = ["risc0-zkvm/prove"]
 
 [dependencies.tokio]
 version = "1.34.0"
