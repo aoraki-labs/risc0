@@ -216,7 +216,7 @@ pub async fn generate_segment_proof(input:String, split_id:String) -> String{
     let data: DenseMatrix<f64> =
         rmp_serde::from_slice(&data_bytes).expect("data filed to deserialize byte array");
 
-    let segment_limit_po2 = 17;
+    let segment_limit_po2 = 16;
 
     println!("segment_limit_po2 {}", segment_limit_po2);
     let env = ExecutorEnv::builder()
