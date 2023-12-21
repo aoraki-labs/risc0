@@ -37,7 +37,8 @@ async fn main() {
     println!("Prediction recorded in journal is: {:?}", test);
     //Start to loop for split id = 0...4, call generate_segment_proof("7.4,2.8,6.1,1.9", split_id:String)
     for i in 0..4 {
-        generate_segment_proof("7.4,2.8,6.1,1.9".to_string(), i.to_string()).await;
+       let res = generate_segment_proof("7.4,2.8,6.1,1.9".to_string(), i.to_string()).await;
+       println!("Prediction recorded in journal is: {:?}", res);
     }
     let result = predict();
     println!("Prediction recorded in journal is: {:?}", &result);

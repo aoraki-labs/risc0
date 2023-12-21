@@ -276,8 +276,13 @@ pub async fn generate_segment_proof(input:String, split_id:String) -> String{
 
     // We read the result that the guest code committed to the journal. The
     // receipt can also be serialized and sent to a verifier.
-    if let Some(value) = segment_receipt {
-        return "0".to_string()
+    if let Some(_value) = segment_receipt {
+        let result:Vec<u32>= session.journal.decode().unwrap();
+        if result.len()==1 {
+            return result[0].to_string()
+        }
+        //session.journal.unwrap().bytes,
+        return "-1".to_string()
     } else {
         return "-1".to_string()
     }
